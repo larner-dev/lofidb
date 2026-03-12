@@ -14,6 +14,8 @@ npm install lofidb
 
 ```typescript
 import { LofiDb, Collection, FieldType, RelationType } from "lofidb";
+import { useLofiQuery } from "lofidb/react";
+import { query, order, $startOfToday } from "lofidb";
 
 // 1. Define your schema
 const schema = {
@@ -55,6 +57,18 @@ class MyDb extends LofiDb {
 
 // 3. Connect your SQLite adapter
 const db = new MyDb(schema, sqliteAdapter);
+
+// 4. Use in a React component
+function TodoList() {
+  const { results, loading } = useLofiQuery(
+    db.todos,
+    query`completed=${false} AND createdAt>=${$startOfToday}`,
+    order`createdAt desc`,
+  );
+
+  if (loading) return <Text>Loading...</Text>;
+  return results.map((todo) => <TodoItem key={todo.id} todo={todo} />);
+}
 ```
 
 ## Database Adapter
@@ -141,41 +155,139 @@ const adapter: DbAdapter = {
 };
 ```
 
-## Subscriptions & React Hook
+## Querying with `query` and `order`
+
+LofiDb uses tagged template literals for filtering and ordering. This gives you a readable SQL-like syntax that's fully reactive — the hook re-subscribes automatically when an interpolated variable changes, but not on regular re-renders.
 
 ```tsx
 import { useLofiQuery } from "lofidb/react";
-import { FilterOperation, FilterValueType } from "lofidb";
+import { query, order, $startOfToday, $endOfToday, $empty } from "lofidb";
+```
 
-function TodoList() {
-  const { results, loading } = useLofiQuery({
-    collection: db.todos,
-    filters: [
-      [
-        ["completed", FilterOperation.eq, { type: FilterValueType.Constant, value: false }],
-      ],
-    ],
-    order: ["createdAt"],
-    orderDirection: ["desc"],
-  });
+### Basic usage
 
-  if (loading) return <Text>Loading...</Text>;
-  return results.map((todo) => <TodoItem key={todo.id} todo={todo} />);
+```tsx
+// Everything, no filters
+const { results } = useLofiQuery(db.todos);
+
+// Just ordering
+const { results } = useLofiQuery(db.todos, order`createdAt desc`);
+
+// Filter only
+const { results } = useLofiQuery(db.todos, query`completed=${false}`);
+
+// Filter + ordering
+const { results } = useLofiQuery(
+  db.todos,
+  query`completed=${false}`,
+  order`createdAt desc`,
+);
+```
+
+### Operators
+
+All standard comparison operators are supported:
+
+```tsx
+query`name=${"Alice"}`           // =
+query`status!=${"deleted"}`      // !=
+query`age>${18}`                 // >
+query`score>=${95}`              // >=
+query`price<${100}`              // <
+query`count<=${5}`               // <=
+```
+
+Spaces around operators are optional: `name = ${"Alice"}` and `name=${"Alice"}` both work.
+
+### AND / OR
+
+Clauses are ANDed by default. Use `OR` to start a new group:
+
+```tsx
+// AND: both must match
+query`age>=${18} AND active=${true}`
+
+// OR: either group matches
+query`status=${"active"} OR role=${"admin"}`
+
+// OR-of-ANDs (full power): parentheses for readability
+query`(status=${status} AND priority>=${minPri}) OR urgent=${true}`
+
+// Complex
+query`(age>=${18} AND active=${true}) OR (role=${"admin"} AND verified=${true}) OR priority>=${10}`
+```
+
+Parentheses are cosmetic — they make the grouping easier to read but the parser only looks at AND/OR keywords. AND binds tighter than OR, so `a AND b OR c` parses as `(a AND b) OR (c)`.
+
+AND and OR are case-insensitive: `and`, `AND`, `And` all work.
+
+### Dynamic values
+
+Three special tokens resolve to dynamic values at query time:
+
+```tsx
+import { $startOfToday, $endOfToday, $empty } from "lofidb";
+
+// Today's items
+query`createdAt>=${$startOfToday} AND createdAt<=${$endOfToday}`
+
+// Not deleted (IS NULL in SQL)
+query`deletedAt=${$empty}`
+```
+
+| Token | Resolves to | SQL equivalent |
+|-------|------------|----------------|
+| `$startOfToday` | Midnight today (ISO string). Subscriptions auto-refresh at midnight. | `>= '2024-06-15T00:00:00.000Z'` |
+| `$endOfToday` | 23:59:59.999 today. | `<= '2024-06-15T23:59:59.999Z'` |
+| `$empty` | `null` | `IS NULL` / `IS NOT NULL` |
+
+### Dot notation for relations
+
+Filter on hydrated relation fields:
+
+```tsx
+query`activity.name=${"Running"}`
+query`category.color=${"blue"} AND completed=${false}`
+```
+
+### Ordering
+
+The `order` tag parses static field names and directions. Multi-column sorting uses commas:
+
+```tsx
+order`createdAt desc`
+order`priority desc, createdAt asc`
+order`name`                          // defaults to asc
+```
+
+### Reactive stability
+
+The key insight: in a tagged template literal, the string parts (field names, operators, AND/OR) are compile-time constants. Only the interpolated `${values}` can change between renders. The hook uses a stable key derived from just the values, so it only re-subscribes when an actual variable changes:
+
+```tsx
+function TodoList({ categoryId, minPriority }) {
+  // Re-subscribes when categoryId or minPriority change.
+  // Does NOT re-subscribe on other re-renders.
+  const { results } = useLofiQuery(
+    db.todos,
+    query`categoryId=${categoryId} AND priority>=${minPriority}`,
+    order`createdAt desc`,
+  );
+  // ...
 }
 ```
 
-The hook automatically re-renders when:
-- A record is created/updated/deleted that matches the filters
-- A related record changes (nested update propagation)
-- The app returns to the foreground (if configured)
+No `useMemo`, no `useRef` tricks, no dependency arrays to manage — just write the query inline.
 
-### Vanilla JS Subscriptions
+### Vanilla JS subscriptions
+
+Outside React, use the subscription manager directly with the raw `Filters` type:
 
 ```typescript
 const { remove } = db.todos.subscriptions.subscribe(
-  filters,
-  ["createdAt"],
-  ["desc"],
+  filters,           // Filters type (OR-of-ANDs array)
+  ["createdAt"],     // order
+  ["desc"],          // orderDirection
   ({ results, loading, error }) => {
     console.log("Todos changed:", results);
   },
@@ -183,45 +295,6 @@ const { remove } = db.todos.subscriptions.subscribe(
 
 // Later: stop listening
 remove();
-```
-
-## Filters
-
-Filters use AND/OR logic. The outer array is OR groups, inner arrays are AND clauses:
-
-```typescript
-// completed = true AND createdAt > startOfToday
-const filters = [
-  [
-    ["completed", FilterOperation.eq, { type: FilterValueType.Constant, value: true }],
-    ["createdAt", FilterOperation.gt, { type: FilterValueType.Dynamic, value: DynamicFilterValue.StartOfToday }],
-  ],
-];
-
-// name = "Alice" OR name = "Bob"  (two OR groups, one clause each)
-const filters2 = [
-  [["name", FilterOperation.eq, { type: FilterValueType.Constant, value: "Alice" }]],
-  [["name", FilterOperation.eq, { type: FilterValueType.Constant, value: "Bob" }]],
-];
-```
-
-### Dynamic values
-
-| Value | Resolves to |
-|-------|------------|
-| `DynamicFilterValue.StartOfToday` | Midnight today (ISO string). Subscriptions auto-refresh at midnight. |
-| `DynamicFilterValue.EndOfToday` | 23:59:59.999 today. |
-| `DynamicFilterValue.Empty` | `null` — generates `IS NULL` in SQL. |
-
-### Nested field filters
-
-Filters support dot notation for hydrated relations:
-
-```typescript
-// Filter items where activity.name = "Running"
-const filters = [
-  [["activity.name", FilterOperation.eq, { type: FilterValueType.Constant, value: "Running" }]],
-];
 ```
 
 ## CRUD
@@ -310,6 +383,7 @@ db.todos.on("create", ({ id, after, input }) => {
 ```
 src/
   types.ts              — All shared types (DbAdapter, filters, schema, records)
+  query.ts              — query`` and order`` tagged template literals
   FilterEngine.ts       — Filter matching (memory) + SQL generation (single source of truth)
   RelationshipGraph.ts  — Computes relationship paths, handles nested update propagation
   Subscription.ts       — Lightweight data holder for a single subscription's state
@@ -338,4 +412,4 @@ npm run test:watch    # watch mode
 npm run test:coverage # coverage report
 ```
 
-111 tests across 3 suites covering FilterEngine (71), RelationshipGraph (30), and SubscriptionManager (10).
+161 tests across 4 suites covering query/order parsing (50), FilterEngine (71), RelationshipGraph (30), and SubscriptionManager (10).

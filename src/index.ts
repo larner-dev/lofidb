@@ -2,6 +2,15 @@
 export { LofiDb, SCHEMA_KEY } from "./LofiDb";
 export { Collection } from "./Collection";
 
+// Query DSL
+export { query, order, $startOfToday, $endOfToday, $empty } from "./query";
+export type {
+  ParsedQuery,
+  ParsedOrder,
+  WhereValue,
+  DynamicToken,
+} from "./query";
+
 // Modules
 export { FilterEngine } from "./FilterEngine";
 export { RelationshipGraph, applyNestedUpdate } from "./RelationshipGraph";
