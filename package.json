@@ -1,0 +1,80 @@
+{
+  "name": "lofidb",
+  "version": "0.1.0",
+  "description": "Reactive local-first database layer with SQLite persistence, subscription-based reactivity, and relationship hydration",
+  "keywords": [
+    "local-first",
+    "sqlite",
+    "reactive",
+    "subscriptions",
+    "offline-first",
+    "react-native",
+    "react"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "dataloader": "^2.2.3",
+    "eventemitter3": "^5.0.1",
+    "immer": "^10.1.1",
+    "just-snake-case": "^3.2.0",
+    "lodash.orderby": "^4.6.0",
+    "lodash.sortby": "^4.7.0",
+    "object-hash": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/lodash.orderby": "^4.6.9",
+    "@types/lodash.sortby": "^4.7.9",
+    "@types/object-hash": "^3.0.6",
+    "@types/react": "^19.2.14",
+    "react": "^18.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
