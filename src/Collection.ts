@@ -175,17 +175,25 @@ export class Collection<
     return Promise.all(base.map((r) => this.hydrator.hydrate(r)));
   }
 
-  async fetchOrThrow(id: string): Promise<H> {
+  async fetch(id: string): Promise<H | null> {
     const columnNames = Object.keys(this.fields).map(snakeCase);
     const result = await this.db.raw(
       `SELECT "${columnNames.join('","')}" FROM "${this.tableName}" WHERE "id"=? LIMIT 1`,
       [id],
     );
     if (!result.rows.length) {
-      throw new Error(`${this.name} with id="${id}" not found`);
+      return null;
     }
     const record = this.hydrator.toJsRecord(result.rows.item(0));
     return this.hydrator.hydrate(record);
+  }
+
+  async fetchOrThrow(id: string): Promise<H> {
+    const result = await this.fetch(id);
+    if (!result) {
+      throw new Error(`${this.name} with id="${id}" not found`);
+    }
+    return result;
   }
 
   private async rawQuery(
