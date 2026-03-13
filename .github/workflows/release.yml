@@ -28,15 +28,4 @@ jobs:
 
       - run: yarn build
 
-      - name: Debug npmrc
-        run: |
-          echo "=== .npmrc contents ==="
-          cat "$NPM_CONFIG_USERCONFIG"
-          echo ""
-          echo "=== npm whoami ==="
-          npm whoami --registry https://registry.npmjs.org || echo "whoami failed"
-          echo ""
-          echo "=== npm config list ==="
-          npm config list
-
       - run: npm publish --provenance --access public
