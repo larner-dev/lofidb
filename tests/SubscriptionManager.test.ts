@@ -75,6 +75,49 @@ describe("SubscriptionManager", () => {
       expect(queryFn).toHaveBeenCalledTimes(1);
     });
 
+    it("does not emit to second subscriber while initial query is in-flight", async () => {
+      // Simulate a slow query that we control
+      let resolveQuery!: (value: TestRecord[]) => void;
+      queryFn.mockReturnValueOnce(
+        new Promise<TestRecord[]>((resolve) => {
+          resolveQuery = resolve;
+        }),
+      );
+
+      const fn1 = vi.fn();
+      const fn2 = vi.fn();
+
+      // First subscribe triggers refresh (async, not awaited)
+      manager.subscribe(undefined, undefined, undefined, fn1);
+
+      // Query is still in-flight — second subscriber attaches to existing subscription
+      manager.subscribe(undefined, undefined, undefined, fn2);
+
+      // fn2 should not be called yet — query is still in-flight
+      expect(fn2).not.toHaveBeenCalled();
+
+      // Now resolve the query
+      resolveQuery(allRecords);
+
+      // Both listeners should get loading: false with results
+      await vi.waitFor(() =>
+        expect(fn1).toHaveBeenCalledWith(
+          expect.objectContaining({
+            loading: false,
+            results: allRecords,
+          }),
+        ),
+      );
+      await vi.waitFor(() =>
+        expect(fn2).toHaveBeenCalledWith(
+          expect.objectContaining({
+            loading: false,
+            results: allRecords,
+          }),
+        ),
+      );
+    });
+
     it("creates separate subscriptions for different filters", async () => {
       const fn1 = vi.fn();
       const fn2 = vi.fn();

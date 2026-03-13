@@ -61,7 +61,7 @@ export class SubscriptionManager<
 
     if (isNew) {
       this.refresh(key);
-    } else {
+    } else if (!sub.loading) {
       sub.emit("change", {
         loading: false,
         error: "",
