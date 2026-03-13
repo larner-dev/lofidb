@@ -1,6 +1,6 @@
 {
   "name": "@larner.dev/lofidb",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Reactive local-first database layer with SQLite persistence, subscription-based reactivity, and relationship hydration",
   "keywords": [
     "local-first",
